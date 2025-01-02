@@ -37,7 +37,7 @@
         app:layout_constraintTop_toBottomOf="@+id/appBarLayoutSignup"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintEnd_toBottomOf="parent">
+        app:layout_constraintBottom_toBottomOf="parent">
 
         <com.google.android.material.imageview.ShapeableImageView
             android:layout_width="150dp"

@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.provider.Settings;
 
 import androidx.activity.EdgeToEdge;
@@ -21,10 +22,19 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import static android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS;
 import android.provider.Settings;
+import android.telephony.CarrierConfigManager;
+import android.util.Log;
+import android.view.View;
+import android.widget.Toast;
 
 import com.example.myapplication.databinding.ActivitySignupBinding;
 import com.google.android.material.snackbar.Snackbar;
+import com.google.firebase.Firebase;
+import com.google.firebase.auth.FirebaseAuth;
+import com.squareup.picasso.Picasso;
+import com.yalantis.ucrop.UCrop;
 
+import java.io.File;
 import java.util.ArrayList;
 
 public class SignupActivity extends AppCompatActivity {
@@ -35,6 +45,16 @@ public class SignupActivity extends AppCompatActivity {
     int deniedpermissionCount=0;
 
     ArrayList<String> permissionList=new ArrayList<>();
+
+    ActivityResultLauncher<Intent> phohtoPickerResultLauncher;
+    ActivityResultLauncher<Intent> croppedPhotoResultLauncher;
+
+    Uri CroppedImageUri;
+    String userName,userEmail,userPassword;
+
+    FirebaseAuth auth= FirebaseAuth.getInstance();
+
+    Uri croppedImageUri;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -53,6 +73,8 @@ public class SignupActivity extends AppCompatActivity {
         }
 
         registerActivityForMultiplePermission();
+        registerActivityForPhotoPicker();
+        registerActivityForPhotoCrop();
 
 
         signupBinding.imageViewProfileSignup.setOnClickListener(v->{
@@ -65,6 +87,41 @@ public class SignupActivity extends AppCompatActivity {
             }
 
         });
+
+        signupBinding.buttonSignup.setOnClickListener(v->{
+            createNewuser();
+        });
+
+    }
+
+    public void createNewuser(){
+        userName=signupBinding.editTextUserNameSignup.getText().toString().trim();
+        userEmail=signupBinding.editTextEmailSignup.getText().toString().trim();
+        userPassword=signupBinding.editTextPasswordSignup.getText().toString().trim();
+
+        if(userName.isEmpty() || userEmail.isEmpty()||userPassword.isEmpty()){
+            Toast.makeText(this, "Please fill all the requirement data", Toast.LENGTH_SHORT).show();
+        }
+        else {
+            signupBinding.buttonSignup.setEnabled(false);
+            signupBinding.progrgressbarSignup.setVisibility(View.VISIBLE);
+
+            auth.createUserWithEmailAndPassword(userEmail,userPassword).addOnCompleteListener(task->{
+               if(task.isSuccessful()){
+                   uploadPhoto();
+
+               }
+               else {
+                   Toast.makeText(this,task.getException().getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                   signupBinding.buttonSignup.setEnabled(true);
+                   signupBinding.progrgressbarSignup.setVisibility(View.INVISIBLE);
+               }
+            });
+        }
+
+    }
+
+    public void uploadPhoto(){
 
     }
 
@@ -119,9 +176,72 @@ public class SignupActivity extends AppCompatActivity {
     }
 
 
+
     public  void openPhotoPicker(){
 
+        Intent intent= new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        phohtoPickerResultLauncher.launch(intent);
+
     }
+
+
+    public void registerActivityForPhotoPicker(){
+        phohtoPickerResultLauncher =registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),result ->{
+           int resultCode= result.getResultCode();
+           Intent data= result.getData();
+           if(resultCode ==RESULT_OK && data !=null){
+               Uri unCroppedImageUri=data.getData();
+               cropSelectedImage(unCroppedImageUri);
+           }
+        });
+
+    }
+
+    public void registerActivityForPhotoCrop(){
+
+        croppedPhotoResultLauncher =registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),cropResult->{
+
+            int resultCode=cropResult.getResultCode();
+            Intent data =cropResult.getData();
+            if(resultCode ==RESULT_OK && data != null){
+                croppedImageUri=UCrop.getOutput(data);
+
+                if(croppedImageUri !=null){
+                    Picasso.get().load(croppedImageUri)
+                            .into(signupBinding.imageViewProfileSignup);
+                }
+            }
+            else if(resultCode ==UCrop.RESULT_ERROR && data !=null){
+                Toast.makeText(this,UCrop.getError(data).getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+            }
+
+        });
+    }
+
+//    public void cropSelectedImage(Uri sourceUri){
+//
+//        Uri destinationUri = Uri.fromFile(new File(getCacheDir(),"cropped"+ System.currentTimeMillis()));
+//        Intent croppedIntent= UCrop.of(sourceUri,destinationUri)
+//                .withAspectRatio(1,1)
+//                .getIntent(SignupActivity.this);
+//
+//
+//    }
+
+
+    public void cropSelectedImage(Uri sourceUri) {
+        try {
+            Uri destinationUri = Uri.fromFile(new File(getCacheDir(), "cropped" + System.currentTimeMillis()));
+            Intent croppedIntent = UCrop.of(sourceUri, destinationUri)
+                    .withAspectRatio(1, 1)
+                    .getIntent(SignupActivity.this);
+            croppedPhotoResultLauncher.launch(croppedIntent); // Launch the cropping intent
+        } catch (Exception e) {
+            Log.e("SignupActivity", "Error creating cropped image file: " + e.getMessage());
+            Toast.makeText(this, "Error processing image. Please try again.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
 
     public void shouldShowPermissionRationaleIfNeeded(){
 
